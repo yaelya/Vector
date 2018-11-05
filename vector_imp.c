@@ -1,25 +1,33 @@
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-typedef struct {
-    size_t capacity;
-    int *data;
-    int total;
-} int_vector;
-
-int_vector *vectorGenerate(size_t capty)//Ctor
+#include "vector_imp.h"
+struct Int_Vector
 {
-	int n;
-	if(capty % 2 == 0)
-		n = 2;
-	else
-		n = 1;
+    int *data;
+    size_t capacity;
+    size_t total;
+};
+
+static size_t nextPow(size_t x)
+{
+	int num = 1;
+	while (num < x)
+		num *= 2;
+	return num;
+}
+
+Int_Vector *vectorGenerate(size_t capty)//Ctor
+{
+	capty = nextPow(capty);
 		
-	int_vector *v = malloc(sizeof(int_vector));
-	if(v) 
+	Int_Vector *v = malloc(sizeof(Int_Vector));
+	if (v != NULL) 
 	{
-	   v->data = malloc(n * capty * sizeof(int));
+	   v->data = malloc(capty * sizeof(int));
+	   if (v->data == NULL)
+	   {
+	   		free(v);
+			return NULL;
+	   } 
+
 	   v->capacity = capty;
 	   v->total = 0;
 	}
@@ -30,104 +38,148 @@ int_vector *vectorGenerate(size_t capty)//Ctor
 	return v;
 }
 
-void vectorDestroy(int_vector *v)//Dtor
+void vectorDestroy(Int_Vector **v)//Dtor
 {
-	if(v)
+	if (*v != NULL || v != NULL)
 	{
-		free(v->data);
-        	free(v);
+		free((*v)->data);
+        	free(*v);
+        	*v = NULL;
 	}
 }
 
-void vectorPush(int_vector *v, int value)//not complit!!
+static ErrorCode vectorResize(Int_Vector *v)
 {
-	if(v->total > v->capacity)
-	{
-		v->data = realloc(v->data,sizeof(int) * v->capacity * 2);
-	}
-	v->data[v->total] = value;
-	v->total = v->total + 1;
+	v->data = realloc(v->data,sizeof(int) * v->capacity * 2);
+		if(v->data == NULL)
+			return E_ALLOCATION_ERROR;
+	v->capacity *= 2;
+	return E_OK;
+}
+
+ErrorCode vectorPush(Int_Vector *v, size_t value)
+{
+	if (v == NULL)
+		return E_NULL_PTR;
 	
-}
-void vectorInsert(int_vector *v, int value, int index)
-{
-	if(v->total > v->capacity)
-		v->data = realloc(v->data,sizeof(int) * v->capacity * 2);
-		
-	for(int i = index; i < v->capacity; ++i)
-		v->data[i + 1] = v->data[i];
-		
-	v->data[index] = value;
-	v->total = v->total + 1;
-}
-int vectorPop(int_vector *v)
-{		
-	int last = v->data[v->total];
-	v->data[v->total] = 0;
-	v->total--;
-	return last;
-}
-
-void vectorRemove(int_vector *v, int value, int index)
-{			
-	for(int i = index; i > 0; --i)
-		v->data[i] = v->data[i-1];
-	v->total--;
-}
-
-int vectorGetElement(int_vector *v, int index)
-{			
-	return v->data[index];
-}
-
-void vectorSetElement(int_vector *v,int value, int index)//??
-{			
-	v->data[index] = value;
-}
-
-int vectorGetSize(int_vector *v)
-{			
-	return v->total;
-}
-
-int vectorGetCapacity(int_vector *v)
-{			
-	return v->capacity;
-}
-
-int vectorCount(int_vector *v)//??
-{	
-	int counter = 0;		
-	for(int i = 0; i < v->capacity; i++)
+	if (v->total == v->capacity)
 	{
-		counter++;
+		ErrorCode err = vectorResize(v);
+		if (err != E_OK)
+			return err;			
+	}
+	v->data[v->total++] = value;
+	return E_OK;
+}
+
+ErrorCode vectorInsert(Int_Vector *v, int value, size_t index)
+{
+	if (v == NULL)
+		return E_NULL_PTR;
+		
+	if (index > v->total)
+		return E_BAD_INDEX;
+	
+	if (index ==  v->total)
+		return vectorPush(v , value);
+		
+	if (v->total == v->capacity)
+	{
+		ErrorCode err = vectorResize(v);
+		if (err != E_OK)
+			return err;			
+	}
+	
+	//moveElementForward();TODO
+	for (int i = v->capacity; i < index; --i)
+		v->data[i] = v->data[i-1];
+		
+	v->data[index] = value;
+	v->total += 1;
+	return E_OK;
+}
+
+ErrorCode vectorPop(Int_Vector *v, int* item)
+{	
+	if (v == NULL || item == NULL)
+		return E_NULL_PTR;
+	
+	if (v->total == 0)
+		return E_UNDERFLOW;
+			
+	*item = v->data[--v->total];
+	return E_OK;
+}
+
+ErrorCode vectorRemove(Int_Vector *v, size_t index, int* item)
+{	
+	int i;
+	if (v == NULL || item == NULL)
+		return E_NULL_PTR;
+		
+	if (index >= v->total)
+		return E_BAD_INDEX;
+		
+	*item =  v->data[index];
+	v->total--;
+				
+	for(i = index; i < v->capacity; ++i)
+		v->data[i] = v->data[i+1];
+	return E_OK;
+}
+
+ErrorCode vectorGetElement(Int_Vector *v, size_t index, int* item)
+{	
+	if (v == NULL || item == NULL)
+		return E_NULL_PTR;
+		
+	if (index >= v->total)
+		return E_BAD_INDEX;	
+			
+	*item = v->data[index];
+	return E_OK;
+}
+
+ErrorCode vectorSetElement(Int_Vector *v,int value, size_t index)
+{			
+	if (v == NULL)
+		return E_NULL_PTR;
+		
+	if (index >= v->total)
+		return E_BAD_INDEX;	
+			
+	v->data[index] = value;
+	return E_OK;
+}
+
+size_t vectorGetSize(Int_Vector *v)
+{			
+	return (v == NULL) ? 0 : v->total;
+}
+
+size_t vectorGetCapacity(Int_Vector *v)
+{			
+	return (v == NULL) ? 0 : v->capacity;
+}
+
+size_t vectorCount(Int_Vector *v, int value)
+{	
+	size_t i;
+	size_t counter = 0;
+	if (v == NULL)
+		return 0;		
+	for(i = 0; i < v->capacity; ++i)
+	{
+		if(v->data[i] == value)
+			++counter;
 	}
 	return counter;
 }
 
-void vectorPrint(int_vector *v)
+void vectorPrint(Int_Vector *v)
 {	
+	int i;
+	printf("the vector:");
 	for(int i = 0; i < v->capacity; i++)
 		printf("%d\n",v->data[i]);
-}
-
-int main(void)
-{
-	printf("**** START-MAIN!!! ****\n");
-	int_vector *v = vectorGenerate(10);
-	vectorPush(v, 7);
-	vectorPush(v, 4);
-	vectorPush(v, 2);
-	vectorPush(v, 9);
-	vectorPush(v, 0);
-	vectorInsert(v, 9, 6);
-	vectorInsert(v, 5, 3);
-	vectorRemove(v, 4, 7);
-	printf("BEFOR PRINT\n");
-	vectorPrint(v);
-	printf("vectorGetElement: in position 3 --> %d\n",vectorGetElement(v , 3));
-	printf("vectorGetCapacity: --->> %d\n",vectorGetCapacity(v));
-	printf("vectorGetSize: --->> %d\n",vectorGetSize(v));
-	printf("**** END-OF-MAIN!!! ****\n");
-     return 0;
 }
